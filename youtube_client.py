@@ -35,6 +35,8 @@ def get_recent_livestreams(channel_id, max_results=5):
         '--flat-playlist',
         '--dump-single-json',
         f'--playlist-end={max_results}',
+        "--sleep-interval", "1",
+        "--max-sleep-interval", "5",
         channel_url
     ]
     print(f"Fetching recent videos from channel: {channel_id} to check for livestreams.")
