@@ -1,0 +1,13 @@
+[project]
+name = "transcript-archiver"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "fastparquet>=2024.11.0",
+    "pandas>=2.3.3",
+    "pyarrow>=21.0.0",
+    "webvtt-py>=0.5.1",
+    "yt-dlp>=2025.10.14",
+]
