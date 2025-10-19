@@ -4,7 +4,7 @@ Main entry point for the YouTube Livestream Monitor application.
 """
 
 import sys
-from config import YOUTUBE_CHANNEL_ID
+from config import YOUTUBE_CHANNEL_ID, MAX_VIDEO_LOOKBACK
 import youtube_client
 import parsers
 import storage
@@ -28,7 +28,7 @@ def main():
     
     # 3. Get the 5 most recent videos from the channel
     print(f"Fetching recent videos for channel ID: {YOUTUBE_CHANNEL_ID}...")
-    recent_videos = youtube_client.get_recent_livestreams(YOUTUBE_CHANNEL_ID)
+    recent_videos = youtube_client.get_recent_livestreams(YOUTUBE_CHANNEL_ID, max_results=MAX_VIDEO_LOOKBACK)
     
     if not recent_videos:
         print("Could not fetch recent videos. Exiting.")
