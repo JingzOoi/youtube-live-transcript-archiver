@@ -7,6 +7,7 @@ import subprocess
 import json
 import tempfile
 import os
+from config import YTDLP_EXECUTABLE
 
 def _run_ytdlp_command(command):
     """A helper function to run a yt-dlp command and handle common errors."""
@@ -31,7 +32,7 @@ def get_recent_livestreams(channel_id, max_results=5):
     """
     channel_url = f"https://www.youtube.com/channel/{channel_id}"
     command = [
-        'yt-dlp',
+        YTDLP_EXECUTABLE,
         '--flat-playlist',
         '--dump-single-json',
         f'--playlist-end={max_results}',
@@ -78,7 +79,7 @@ def download_transcript(video_id):
     temp_filepath_base = os.path.join(temp_dir, f"transcript_{video_id}")
 
     command = [
-        'yt-dlp', '--write-auto-sub', '--sub-lang', 'en', '--skip-download',
+        YTDLP_EXECUTABLE, '--write-auto-sub', '--sub-lang', 'en', '--skip-download',
         '-o', temp_filepath_base, video_url
     ]
     
@@ -107,7 +108,7 @@ def download_live_chat(video_id):
     temp_filepath_base = os.path.join(temp_dir, f"chat_{video_id}")
 
     command = [
-        'yt-dlp', 
+        YTDLP_EXECUTABLE, 
         '--skip-download', 
         '--write-sub', 
         '--sub-lang', 
