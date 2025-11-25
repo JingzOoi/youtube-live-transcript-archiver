@@ -248,12 +248,14 @@ def parse_live_chat_json(filepath):
             df_chat["offset_text"] = df_chat["offset_seconds"].apply(
                 lambda s: str(datetime.timedelta(seconds=int(s)))
             )
-            # Reorder and drop absolute timestamp column
+            df_chat["minute"] = df_chat["offset_seconds"] // 60
+            # Reorder and drop author id column
             df_chat = df_chat[[
                 'offset_seconds', 
+                'minute',
+                'absolute_timestamp_seconds',
                 'offset_text', 
                 'author_name', 
-                'author_id', 
                 'message', 
                 'is_superchat', 
                 'superchat_amount'
