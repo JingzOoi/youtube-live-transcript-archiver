@@ -162,30 +162,34 @@ def parse_transcript_vtt(filepath):
         print(f"An error occurred while parsing transcript file {filepath}: {e}")
         return pd.DataFrame()
 
-def parse_live_chat_json(filepath):
+def parse_live_chat_json(filepath: str) -> pd.DataFrame:
     """
-    Parses a .live_chat.json (JSON Lines) file into a structured DataFrame
-    with timestamps relative to the stream start, identifying superchats.
-
-    Args:
-        filepath (str): The path to the .live_chat.json file.
-
-    Returns:
-        pd.DataFrame: A DataFrame containing the chat data.
-                      Returns an empty DataFrame if parsing fails or file is empty.
+    Parses a .live_chat.json file using official video offsets.
     """
-    print(f"Parsing live chat JSON file with superchat detection: {filepath}")
+    print(f"Parsing live chat JSON: {filepath}")
     try:
         chat_records = []
         with open(filepath, 'r', encoding='utf-8') as f:
             for line in f:
                 try:
                     obj = json.loads(line)
-                    actions = obj.get("replayChatItemAction", {}).get("actions", [])
+                    
+                    # 1. Extract Official Video Offset
+                    replay_action = obj.get("replayChatItemAction", {})
+                    video_offset_msec = replay_action.get("videoOffsetTimeMsec")
+                    
+                    # Skip messages without an official video timestamp (helps remove some artifacts)
+                    if not video_offset_msec:
+                        continue
+                        
+                    # Calculate seconds immediately
+                    offset_seconds = int(video_offset_msec) / 1000.0
+                    
+                    # Handle Actions
+                    actions = replay_action.get("actions", [])
                     for action in actions:
                         item = action.get("addChatItemAction", {}).get("item", {})
                         
-                        # Determine the type of renderer
                         msg_renderer = item.get("liveChatTextMessageRenderer")
                         paid_renderer = item.get("liveChatPaidMessageRenderer")
                         sticker_renderer = item.get("liveChatPaidStickerRenderer")
@@ -194,27 +198,21 @@ def parse_live_chat_json(filepath):
                         if not renderer:
                             continue
 
-                        # --- Extract common data ---
-                        timestamp_usec = int(renderer.get("timestampUsec", 0))
-                        timestamp_sec = timestamp_usec // 1_000_000
-                        author_name = renderer.get("authorName", {}).get("simpleText", "Unknown Author")
-                        author_id = renderer.get("authorExternalChannelId")
-
-                        # --- Initialize default values ---
+                        author_name = renderer.get("authorName", {}).get("simpleText", "Unknown")
+                        
                         message = ""
                         is_superchat = False
                         superchat_amount = None
 
-                        # --- Process based on renderer type ---
                         if msg_renderer:
-                            message_runs = msg_renderer.get("message", {}).get("runs", [])
-                            message = "".join(part.get("text", "") for part in message_runs).strip()
+                            runs = msg_renderer.get("message", {}).get("runs", [])
+                            message = "".join(part.get("text", "") for part in runs).strip()
                         
                         elif paid_renderer:
                             is_superchat = True
                             superchat_amount = paid_renderer.get("purchaseAmountText", {}).get("simpleText")
-                            message_runs = paid_renderer.get("message", {}).get("runs", [])
-                            message = "".join(part.get("text", "") for part in message_runs).strip()
+                            runs = paid_renderer.get("message", {}).get("runs", [])
+                            message = "".join(part.get("text", "") for part in runs).strip()
 
                         elif sticker_renderer:
                             is_superchat = True
@@ -223,37 +221,38 @@ def parse_live_chat_json(filepath):
 
                         if message:
                             chat_records.append({
-                                'absolute_timestamp_seconds': timestamp_sec,
+                                'offset_seconds': offset_seconds,
                                 'author_name': author_name,
-                                'author_id': author_id,
                                 'message': message,
                                 'is_superchat': is_superchat,
                                 'superchat_amount': superchat_amount
                             })
 
                 except (json.JSONDecodeError, AttributeError):
-                    # Skip malformed lines or lines without the expected structure
                     continue
         
         if not chat_records:
             return pd.DataFrame()
 
         df_chat = pd.DataFrame(chat_records)
-        df_chat = df_chat.sort_values("absolute_timestamp_seconds").reset_index(drop=True)
+        # Ensure we sort by the official video offset
+        df_chat = df_chat.sort_values("offset_seconds").reset_index(drop=True)
 
-        # --- Normalize to be relative to stream start ---
+        # 2. Filter out negative offsets (Pre-stream / Waiting room)
+        # Sometimes official offsets are negative if the user chatted before the recording started
+        df_chat = df_chat[df_chat['offset_seconds'] >= 0].copy()
+
         if not df_chat.empty:
-            stream_start_time = df_chat["absolute_timestamp_seconds"].min()
-            df_chat["offset_seconds"] = df_chat["absolute_timestamp_seconds"] - stream_start_time
+            df_chat["minute"] = (df_chat["offset_seconds"] // 60).astype(int)
+            
+            # Create human readable timestamp
             df_chat["offset_text"] = df_chat["offset_seconds"].apply(
                 lambda s: str(datetime.timedelta(seconds=int(s)))
             )
-            df_chat["minute"] = df_chat["offset_seconds"] // 60
-            # Reorder and drop author id column
+
             df_chat = df_chat[[
                 'offset_seconds', 
                 'minute',
-                'absolute_timestamp_seconds',
                 'offset_text', 
                 'author_name', 
                 'message', 
@@ -261,10 +260,9 @@ def parse_live_chat_json(filepath):
                 'superchat_amount'
             ]]
         
-        print(f"Successfully parsed and normalized {len(df_chat)} chat messages into a DataFrame.")
+        print(f"Parsed {len(df_chat)} chat messages.")
         return df_chat
 
-    except (IOError, Exception) as e:
-        print(f"An error occurred while parsing chat file {filepath}: {e}")
+    except Exception as e:
+        print(f"Error parsing chat {filepath}: {e}")
         return pd.DataFrame()
-
