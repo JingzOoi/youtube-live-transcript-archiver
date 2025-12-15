@@ -1,131 +1,132 @@
-# YouTube Livestream Transcript & Chat Archiver
+# Youtube Live Clip Generator
 
-A Python tool to automatically download, parse, and archive transcripts and live chat replays from YouTube livestreams.
+![Python](https://img.shields.io/badge/Python-3.10%2B-blue) ![Status](https://img.shields.io/badge/Status-Production%20Ready-green) ![Platform](https://img.shields.io/badge/Platform-YouTube%20%7C%20Twitch-red)
 
-## Features
+A production-grade automation pipeline that identifies, extracts, and engineers broadcast-ready clips from long-form YouTube and Twitch streams. 
 
-- **Automatic Monitoring**: Periodically checks a YouTube channel for new livestreams and processes them.
-- **Data Download**: Fetches English auto-generated transcripts (VTT) and live chat replays (JSON) using `yt-dlp`.
-- **Intelligent Parsing**:
-    - **Transcripts**: Cleans and consolidates VTT caption data, removing artifacts and merging fragmented cues.
-    - **Live Chat**: Parses JSON chat data, extracting messages, authors, timestamps, and SuperChat details.
-- **Structured Storage**: Saves processed data in an efficient Parquet format within organized, date-stamped directories.
-- **State Tracking**: Maintains a record of processed videos to avoid redundant work.
-- **Single-Video Analysis**: Includes Jupyter notebooks for deep-dive analysis of individual videos.
+Unlike simple scripts that download entire videos, this engine uses **Rolling Z-Score analysis** to detect chat anomalies, performs **partial range requests** to save bandwidth, and enforces **Constant Frame Rate (CFR)** standards for seamless integration with DaVinci Resolve and Premiere Pro.
 
-## Project Structure
+## 🚀 Key Features
 
-```
-.
-├── main.py                 # Main application entry point
-├── youtube_client.py       # Handles interaction with yt-dlp
-├── parsers.py              # Parses VTT and JSON data into pandas DataFrames
-├── storage.py              # Manages file saving and state tracking
-├── config.py               # Configuration settings (create this file)
-├── analysis.ipynb          # Notebook for single-video analysis
-├── data/                   # Directory where archived data is stored
-├── processed_videos.txt    # Tracks IDs of processed videos
-└── tests.py                # Unit tests
-```
+*   **Multi-Platform Ingestion:** Seamlessly handles YouTube VODs and Twitch Replays.
+*   **Robust Signal Processing:** Uses adaptive Rolling Z-Score analysis to detect highlights. It adjusts to the stream's baseline, ensuring "raids" or viral moments don't skew the detection threshold for the rest of the video.
+*   **Bandwidth Efficient:** Downloads *only* the highlight segments (plus safety buffers) using HLS range requests. A 10-hour stream yields 500MB of clips, not 50GB of raw video.
+*   **Editor-Ready Output:** 
+    *   Transcodes clips to standard H.264/AAC with strict Constant Frame Rate (CFR).
+    *   Generates industry-standard **CMX 3600 EDLs** (Edit Decision Lists) via OpenTimelineIO.
+*   **Safety & Testing:** Includes a "Dry Run" mode to simulate pipeline execution without touching video files.
 
-## Dependencies
+## 🛠️ Architecture
 
-The project uses Python 3 and relies on the following external libraries:
+The pipeline follows a strict ETL (Extract, Transform, Load) pattern:
 
-- `yt-dlp`: Command-line tool for downloading data from YouTube. Must be installed and available in your system's PATH.
-- `pandas`: For data manipulation and analysis.
-- `webvtt-py`: For parsing VTT subtitle files.
-
-All Python dependencies are listed in `pyproject.toml`.
-
-## Installation
-
-1.  **Clone the repository**:
-    ```bash
-    git clone <your-repo-url>
-    cd youtube-live-transcript-archiver
-    ```
-
-2.  **Install Python dependencies**:
-    ```bash
-    # Using uv (recommended)
-    uv sync
-
-    # Or using pip
-    pip install -r requirements.txt .
-    ```
-
-3.  **Install yt-dlp**:
-    ```bash
-    pip install yt-dlp
-    ```
-    Ensure `yt-dlp` is in your system's PATH.
-
-## Configuration
-
-Create a `config.py` file in the root directory with the following settings:
-
-```python
-# config.py
-
-# The YouTube Channel ID to monitor.
-# Find this in the channel's URL: https://www.youtube.com/channel/THIS_IS_THE_ID
-YOUTUBE_CHANNEL_ID = "UC..."
-
-# The number of recent livestreams to check on each run.
-MAX_VIDEO_LOOKBACK = 5
-
-# The yt-dlp executable. Change if using a custom path.
-YTDLP_EXECUTABLE = "yt-dlp"
+```ascii
+[Ingest]          [Analyze]           [Refine]           [Export]
+   |                  |                   |                  |
+   v                  v                   v                  v
+Download       Parse Chat Logs      Merge Overlaps      Partial DL
+Chat/Meta     & Calculate Z-Score   & Add Padding     (Force Keyframes)
+   |                  |                   |                  |
+   +------------------+-------------------+                  v
+                                                     Normalize (FFmpeg)
+                                                             |
+                                                             v
+                                                      Generate EDL
+                                                      & Clean .mp4
 ```
 
-## Usage
+Here is the updated **Installation** section tailored for **uv**.
 
-### 1. Automatic Monitoring
+### 📦 Installation
 
-Run the main application to monitor the configured channel for new livestreams:
+This project utilizes **[uv](https://github.com/astral-sh/uv)** for lightning-fast dependency management.
+
+#### Prerequisites
+1.  **FFmpeg:** Must be installed on your system and accessible via PATH.
+    *   *Mac:* `brew install ffmpeg`
+    *   *Windows:* `winget install ffmpeg`
+    *   *Linux:* `sudo apt install ffmpeg`
+2.  **uv:** [Install uv](https://github.com/astral-sh/uv?tab=readme-ov-file#installation) if you haven't already.
+
+#### Setup
 
 ```bash
-python main.py
+# 1. Clone the repository
+git clone https://github.com/JingzOoi/youtube-live-transcript-archiver.git
+cd youtube-live-transcript-archiver
+
+# 2. Create Virtual Environment (uv defaults to .venv)
+uv venv
+
+# 3. Activate Environment
+# Linux/Mac:
+source .venv/bin/activate
+# Windows:
+.venv\Scripts\activate
+
+# 4. Install Dependencies
+uv pip install pandas numpy scipy yt-dlp vaderSentiment ffmpeg-python opentimelineio plotly pydantic
 ```
 
-On each run, the application will:
-1.  Check the most recent `MAX_VIDEO_LOOKBACK` livestreams from the channel.
-2.  Skip any videos already processed.
-3.  For new videos, attempt to download and process both the transcript and live chat.
-4.  Save the processed data to the `data/` directory and mark the video as processed.
+---
 
-### 2. Single-Video Analysis
+*Note: If you prefer `requirements.txt`, you can generate one using `uv pip compile` or simply run `uv pip install -r requirements.txt` if provided.*
 
-The project includes Jupyter notebooks for analyzing a single video in-depth.
 
--   **`analysis.ipynb`**: A comprehensive notebook for analyzing chat activity, user engagement, and keyword correlations. It's designed for ad-hoc, single-video studies.
+## 🖥️ Usage
 
-To use it:
-1.  Open the notebook in Jupyter.
-2.  Set the `YOUTUBE_VIDEO_URL` variable at the top of the notebook.
-3.  Run all cells to perform the analysis and generate visualizations.
-
-## Data Output
-
-Processed data is saved in the `data/` directory, with each video in its own folder:
-
-```
-data/
-└── YYYYMMDD_<VIDEO_ID>/
-    ├── metadata.json
-    ├── transcript.parquet
-    └── chat.parquet
-```
-
--   **`metadata.json`**: Contains video ID, title, and processing timestamp.
--   **`transcript.parquet`**: A pandas DataFrame with cleaned transcript text and timestamps.
--   **`chat.parquet`**: A pandas DataFrame with chat messages, authors, timestamps, and SuperChat information.
-
-## Running Tests
-
-Execute the test suite to verify functionality:
+### 1. The Clip Generator (Production Mode)
+The main entry point. It scans the URL, detects highlights, and downloads the finalized clips to the `./data` directory.
 
 ```bash
-python -m unittest tests.py
+python main.py https://www.youtube.com/watch?v=VIDEO_ID
 ```
+
+### 2. Dry Run (Test Mode)
+Highly recommended before processing long streams. This runs the ingestion and analysis but **skips** the video download/transcode steps. It prints the FFmpeg commands it *would* have run.
+
+```bash
+python main.py https://www.twitch.tv/videos/VIDEO_ID --dry-run
+```
+
+### 3. Visualization Workbench
+Open `visualization_workbench.ipynb` in VS Code or Jupyter.
+*   Interactively visualize the chat volume vs. the Z-Score baseline.
+*   Read chat logs at specific timestamps to verify context.
+*   Test time-slicing (e.g., "Analyze only hour 2 to hour 4").
+
+## ⚙️ Configuration
+
+Settings can be tuned in `config.py` to adjust sensitivity.
+
+| Parameter | Default | Description |
+| :--- | :--- | :--- |
+| `ROLLING_WINDOW_MIN` | `20` | The "Memory" of the algorithm. Look back 20 mins to determine baseline. |
+| `SPIKE_Z_SCORE` | `3.0` | Sensitivity. Higher = fewer, more intense highlights. |
+| `PADDING_PRE_SEC` | `120` | Seconds of context to capture *before* the spike. |
+| `PADDING_POST_SEC` | `60` | Seconds of context to capture *after* the spike. |
+| `MERGE_THRESHOLD` | `30` | If two highlights are < 30s apart, merge them into one clip. |
+
+## 📂 Project Structure
+
+```text
+stream-highlight-engine/
+├── data/                  # Output directory (Ignored by Git)
+├── src/
+│   ├── analyze.py         # Signal processing & Z-score logic
+│   ├── ingest.py          # yt-dlp Python wrappers
+│   ├── export.py          # OTIO EDL generation
+│   ├── parsers.py         # JSON/VTT parsing logic
+│   ├── video.py           # FFmpeg transcoding & Probing
+│   └── utils.py           # Logging helpers
+├── config.py              # Pydantic configuration models
+├── main.py                # CLI Orchestrator
+├── visualization.ipynb    # Interactive Analysis Notebook
+└── README.md
+```
+
+## ⚠️ Notes on Twitch Analysis
+This engine uses **VADER** for sentiment analysis. While VADER is excellent for general English, Twitch chat relies heavily on emotes (`PogChamp`, `LULW`, `Kappa`).
+
+*   **Current State:** The analyzer treats standard text ("LMAO", "OMG") as high sentiment.
+*   **Future Roadmap:** We plan to inject a custom Lexicon into VADER to assign sentiment scores to common Twitch emotes (e.g., `Pog = +1.0`, `Sadge = -0.8`).

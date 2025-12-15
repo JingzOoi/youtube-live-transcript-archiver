@@ -195,7 +195,7 @@ def parse_transcript_vtt(filepath):
         return pd.DataFrame()
 
 
-def parse_live_chat_json(filepath: str) -> pd.DataFrame:
+def parse_youtube_chat_json(filepath: str) -> pd.DataFrame:
     """
     Parses a .live_chat.json file using official video offsets.
     """
@@ -448,3 +448,17 @@ def parse_twitch_chat_json(filepath: str) -> pd.DataFrame:
     except Exception as e:
         print(f"Error parsing Twitch chat {filepath}: {e}")
         return pd.DataFrame()
+
+
+def parse_chat_log(filepath, platform="youtube"):
+    """
+    Factory function to parse logs from different platforms 
+    into a Unified Data Model.
+    """
+    if platform == "youtube":
+        return parse_youtube_chat_json(filepath)
+    elif platform == "twitch":
+        return parse_twitch_chat_json(filepath)
+    else:
+        raise ValueError(f"Unknown platform: {platform}")
+    
