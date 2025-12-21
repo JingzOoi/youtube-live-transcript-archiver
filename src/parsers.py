@@ -9,6 +9,8 @@ import datetime
 import pandas as pd
 import webvtt
 import io
+from typing import Optional, List, Tuple, Dict
+from config import AppConfig
 
 
 def _clean_subtitle_text(raw_text):
@@ -50,8 +52,11 @@ def _consolidate_caption_df(df_initial):
     if df_initial.empty:
         return pd.DataFrame()
 
-    # 1. Clean the text for each caption
-    df_initial["cleaned_text"] = df_initial["text"].apply(_clean_subtitle_text)
+    # 1. Apply text replacements to each caption
+    if hasattr(AppConfig, "REPLACE_WORDS"):
+        df_initial["cleaned_text"] = df_initial["text"].apply(_clean_subtitle_text)
+    else:
+        df_initial["cleaned_text"] = df_initial["text"].apply(_clean_subtitle_text)
 
     # 2. Filter out rows that are empty after cleaning
     df_processed = df_initial[df_initial["cleaned_text"] != ""].copy()
@@ -125,6 +130,40 @@ def _consolidate_caption_df(df_initial):
     return pd.DataFrame(consolidated_rows)
 
 
+def apply_text_replacements(
+    text: str, replacements: List[Tuple[str, str]]
+) -> Tuple[str, Dict[str, int]]:
+    """
+    Apply text replacement rules to clean/standardize text content.
+
+    Args:
+        text: Original text content
+        replacements: List of (original, replacement) tuples
+
+    Returns:
+        Tuple of (cleaned_text, replacement_stats)
+    """
+    if not text or not replacements:
+        return text, {}
+
+    cleaned_text = text
+    replacement_stats = {}
+
+    for original, replacement in replacements:
+        # Case-insensitive replacement using regex
+        pattern = re.compile(re.escape(original), re.IGNORECASE)
+        original_count = len(re.findall(original, cleaned_text))
+
+        if original_count > 0:
+            cleaned_text = pattern.sub(replacement, cleaned_text)
+            replacement_stats[original] = {
+                "count": original_count,
+                "replacement": replacement,
+            }
+
+    return cleaned_text, replacement_stats
+
+
 def parse_transcript_vtt(filepath):
     """
     Parses a .vtt transcript file and returns a cleaned, consolidated DataFrame
@@ -164,8 +203,31 @@ def parse_transcript_vtt(filepath):
         # 2. Process and consolidate the DataFrame
         df_final = _consolidate_caption_df(df_initial.copy())
 
-        if df_final.empty:
-            return pd.DataFrame()
+        # Apply text replacements if configured
+        try:
+            from config import AppConfig
+
+            if hasattr(AppConfig, "REPLACE_WORDS"):
+                # Apply replacements to transcript text
+                replacement_stats_list = []
+                for idx, row in df_final.iterrows():
+                    text_value = str(row["text"])  # Convert to string
+                    cleaned_text, stats = apply_text_replacements(
+                        text_value, AppConfig.REPLACE_WORDS
+                    )
+                    df_final.loc[idx, "text"] = cleaned_text
+                    replacement_stats_list.append(stats)
+
+                # Log replacement statistics (could be moved to analysis reporter)
+                total_replacements = sum(len(stats) for stats in replacement_stats_list)
+                if total_replacements > 0:
+                    print(
+                        f"Applied {total_replacements} text replacements to transcript"
+                    )
+
+        except ImportError:
+            # Config not available, skip replacements
+            pass
 
         # 3. Rename columns for consistency and clarity (already relative)
         df_final = df_final.rename(
@@ -174,7 +236,12 @@ def parse_transcript_vtt(filepath):
                 "end_time_str": "end_time",
                 "start_seconds": "offset_start_seconds",
                 "end_seconds": "offset_end_seconds",
+                "text": "text",
             }
+        )
+
+        print(
+            f"Successfully parsed and consolidated VTT into a DataFrame with {len(df_final)} rows."
         )
 
         print(
@@ -450,9 +517,57 @@ def parse_twitch_chat_json(filepath: str) -> pd.DataFrame:
         return pd.DataFrame()
 
 
+def get_transcript_segment(
+    transcript_df: pd.DataFrame,
+    start_time: Optional[float] = None,
+    end_time: Optional[float] = None,
+):
+    """
+    Extracts transcript content within specified time range.
+
+    Args:
+        transcript_df: DataFrame with transcript data from parse_transcript_vtt()
+        start_time: Start time in seconds (None = beginning)
+        end_time: End time in seconds (None = end)
+
+    Returns:
+        pd.DataFrame: Filtered transcript with segments that overlap the time range
+    """
+    if transcript_df.empty:
+        return pd.DataFrame()
+
+    # If no time bounds, return full transcript
+    if start_time is None and end_time is None:
+        return transcript_df.copy()
+
+    # Complex overlap logic for segments that span the time boundaries
+    if start_time is not None and end_time is not None:
+        overlap_condition = (
+            (
+                (transcript_df["offset_start_seconds"] >= start_time)
+                & (transcript_df["offset_start_seconds"] <= end_time)
+            )
+            | (
+                (transcript_df["offset_end_seconds"] >= start_time)
+                & (transcript_df["offset_end_seconds"] <= end_time)
+            )
+            | (
+                (transcript_df["offset_start_seconds"] <= start_time)
+                & (transcript_df["offset_end_seconds"] >= end_time)
+            )
+        )
+        return transcript_df[overlap_condition].copy()
+    elif start_time is not None:
+        return transcript_df[transcript_df["offset_end_seconds"] >= start_time].copy()
+    elif end_time is not None:
+        return transcript_df[transcript_df["offset_start_seconds"] <= end_time].copy()
+
+    return transcript_df.copy()
+
+
 def parse_chat_log(filepath, platform="youtube"):
     """
-    Factory function to parse logs from different platforms 
+    Factory function to parse logs from different platforms
     into a Unified Data Model.
     """
     if platform == "youtube":
@@ -461,4 +576,3 @@ def parse_chat_log(filepath, platform="youtube"):
         return parse_twitch_chat_json(filepath)
     else:
         raise ValueError(f"Unknown platform: {platform}")
-    

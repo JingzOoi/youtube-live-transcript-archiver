@@ -244,8 +244,8 @@ def download_video(video_id, output_dir, download_sections=None, video_name=None
         video_file = f"{dl_filepath_base}.{ext}"
         if os.path.exists(video_file):
             print(f"Video downloaded to: {video_file}")
-            if download_sections:
-                video_file = normalize_for_resolve(video_file)
+            # if download_sections:
+            #     video_file = normalize_for_resolve(video_file)
             return video_file
 
     print(f"Video download failed for video ID: {video_id}")

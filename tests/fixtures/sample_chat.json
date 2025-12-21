@@ -1,0 +1,1 @@
+{"replayChatItemAction":{"videoOffsetTimeMsec":"5000","actions":[{"addChatItemAction":{"item":{"liveChatTextMessageRenderer":{"authorName":{"simpleText":"TestUser"},"message":{"runs":[{"text":"Hello world"}]},"timestampUsec":"5000000"}}}}]}}

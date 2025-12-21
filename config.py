@@ -42,8 +42,29 @@ class AppConfig(BaseModel):
         "clioaiKEKW",
     ]
 
+    REPLACE_WORDS: List[tuple] = [("cleo", "clio"), ("FaZe", "Phase"), ("&gt;&gt;", "")]
+
+    # Time slicing parameters
+    START_TIME_SEC: Optional[int] = None  # Start time in seconds (None = video start)
+    END_TIME_SEC: Optional[int] = None  # End time in seconds (None = video end)
+
+    # Analysis reporting
+    GENERATE_ANALYSIS_REPORT: bool = True
+    INCLUDE_TRANSCRIPT_CONTEXT: bool = True
+    REPORT_FORMAT: str = "html"  # Options: html, json, txt, all
+    REPORT_INCLUDE_RAW_DATA: bool = False  # Exclude full datasets by default
+    REPORT_COMPRESS_JSON: bool = True  # Use gzip for large JSON files
+    REPORT_TEMPLATE: str = "modern"  # Template style: modern, compact, detailed
+    HTML_INCLUDE_CHARTS: bool = True  # Generate interactive charts
+    MAX_TRANSCRIPT_EXCERPT: int = 500  # Limit transcript characters per highlight
+
 
 # Usage example for main.py
-def get_config(url):
+def get_config(url, start_time=None, end_time=None):
     video_id = url.split("v=")[-1].split("&")[0]
-    return AppConfig(YOUTUBE_URL=url, OUTPUT_DIR=f"./data/{video_id}")
+    return AppConfig(
+        YOUTUBE_URL=url,
+        OUTPUT_DIR=f"./data/{video_id}",
+        START_TIME_SEC=start_time,
+        END_TIME_SEC=end_time,
+    )

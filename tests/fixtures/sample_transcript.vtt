@@ -1,0 +1,13 @@
+WEBVTT
+
+00:00:10.000 --> 00:00:15.000
+First segment with some text content.
+
+00:01:30.000 --> 00:01:35.000
+Second segment with more content to test.
+
+00:02:45.000 --> 00:02:50.000
+Third segment with final test content.
+
+00:03:15.000 --> 00:03:20.000
+Fourth segment with <c>special text</c> formatting.

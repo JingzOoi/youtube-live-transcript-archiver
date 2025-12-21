@@ -122,6 +122,8 @@ def download_video(vod_id, output_dir, download_sections=None, video_name=None):
             start_time, end_time = download_sections[0]
             # Note: TwitchDownloaderCLI may not support section downloads like yt-dlp
             # This is a placeholder - actual implementation may need adjustment
+            command.extend(["--beginning", start_time])
+            command.extend(["--ending", end_time])
             print(f"Section download requested from {start_time} to {end_time}")
             print(
                 "Note: TwitchDownloaderCLI may not support time-based section downloads"
